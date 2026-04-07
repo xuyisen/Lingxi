@@ -1,539 +1,218 @@
 <img src="imgs/Lingxi_logo.png" alt="Lingxi Logo" width="200"/>
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/nimasteryang/Lingxi)
-# Intro
-**Lingxi** is an open‑source, multi‑agent framework designed to automate a broad range of software‑engineering tasks.
 
+# Lingxi: Knowledge-Guided Multi-Agent Framework for Repository-Level Issue Resolution
 
-# SWE-Bench support
+**Lingxi** is an open-source, multi-agent framework that automates repository-level software issue resolution. It decomposes the repair workflow into specialized agents and leverages historical development knowledge to guide the repair process.
 
-🎉 Lingxi v1.5 resolve 74.6% on SWE-Bench Verified!
+Lingxi has evolved through two major versions:
+- **Lingxi v1.5** mines transferable procedural knowledge from historical issue-patch pairs and uses multiple analysis agents to examine the target issue from different perspectives, achieving **74.6% Pass@1** on SWE-bench Verified.
+- **Lingxi v2.0** introduces a *trajectory-to-guidance* mechanism that distills stage-aware procedural guidance from historical repair trajectories, achieving **81.2% Pass@1** on SWE-bench Verified -- the **first autonomous agent to exceed 80%** on this benchmark.
 
+---
 
-Lingxi v1.5's implementation of SWE-Bench workflow can be accessed at https://doi.org/10.5281/zenodo.16777249. Please download the workflow script from Zenodo and place it under `src/workflow/` directory to use it. Please see our technical report at [Lingxi v1.5 Technical Report (PDF)](docs/Lingxi%20v1.5%20Technical%20Report%20200725.pdf). Our paper will release soon!
+## Key Results
 
-# Setup
+| Version | Backbone Model | Pass@1 (%) | Leaderboard |
+|---------|---------------|-----------|-------------|
+| **Lingxi v2.0** | MiniMax M2.5 (HR) | **81.2** | **#1** |
+| Lingxi v1.5 | Claude 4 Sonnet | 74.6 | - |
 
-## Part 1: Dependencies
-- Dependencies are located in `pyproject.toml`, and can be installed with the following command:
-	- `cd Lingxi && pip install -e .`
-- The installation command can be ignored if using `uv` package manager and `uv run` later on (see Run section for reference)
-- It is suggested to use some package manager (e.g., venv, pipenv, uv, ...)
-## Part 2: Environment Config
-- The prototype requires the following environment variables to run:
-	1. `LLM_PROVIDER`: The provider of the LLM to be used(e.g., "anthropic", "openai", "deepseek")
-	2. `LLM_MODEL`: The model name of the LLM to be used (e.g., "claude-3-5-haiku-latest")
-	3. The corresponding `LLM_PROVIDER` API key to be used
-		- `LLM_PROVIDER="anthropic"`, set `ANTHROPIC_API_KEY`
-		- `LLM_PROVIDER="openai"`, set `OPENAI_API_KEY`
-		- `LLM_PROVIDER="deepseek"`, set `DEEPSEEK_API_KEY`
-		- Additional provider integrations can be added, see [Langchain Chat Models](https://python.langchain.com/docs/integrations/chat/)
-	4. `OPENAI_API_KEY`: The OpenAI API key to be used. Required for generating embeddings to build project knowledge.
-        - Make sure your OpenAI account has access to the `text-embedding-3-small` model. You can request access from [OpenAI API platform](https://platform.openai.com/).
-	5. `GITHUB_TOKEN`: A GitHub API token used to automatically collect issue report information. It can be generated using a GitHub account through the following menus:
-		- Profile > Settings > Developer Settings > Personal access tokens > Fine-grained tokens
-- Place these environment variables in the `.env` file in the root of the project. This file will be loaded by the prototype on execution
-# Run
-- The prototype can be ran with either of the following commands:
-	- `langgraph dev --no-reload` (if installed via `pip`)
-	- `uv run --env-file .env langgraph dev --no-reload` (if using `uv`)
-- The prototype will create a local instance of LangGraph Studio and will open a browser instance to the page once the prototype is run
-- Once in the UI, select the graph to run at the top left
+### Lingxi v2.0 vs. State-of-the-Art
 
-![Graph Select](imgs/GraphSelect.png)
+| Approach | Backbone Model | Pass@1 (%) |
+|----------|---------------|-----------|
+| **Lingxi v2.0** | **MiniMax M2.5 (HR)** | **81.2** |
+| live-SWE-agent | Claude 4.5 Opus (Medium) | 79.2 |
+| Sonar Foundation Agent | Claude 4.5 Opus | 79.2 |
+| TRAE | Doubao-Seed-Code | 78.8 |
+| mini-SWE-agent v2 | MiniMax M2.5 (HR) | 75.8 |
+| Lingxi v1.5 | Claude 4 Sonnet | 74.6 |
 
-- Add a Message by clicking "+ Message" button, and add the Github issue URL. An example URL is: https://github.com/gitpython-developers/GitPython/issues/1977
-![Add Msg](imgs/AddMsg.png)
+---
 
-- Finally click the Submit button
-- Note that human feedback functionality is disabled be default, it can be enabled by clicking the checkbox in the LangGraph Studio UI before submitting the issue URL:
-![Graph1](imgs/HILenable.png)
-# Agents
-- The prototype currently consists of five main agents across the graphs and implemented in various LangGraph nodes
-## Multi-Agent Manager
-- The multi-agent manager coordinates between the issue resolver and reviewer agents to provide feedback and or guidance to each step. 
-- Only used in `src/agent/hierarchy_graph_demo.py`. 
-- Prompt in `src/agent/prompt/mam.py`
-## Supervisor
-- The supervisor oversees the entire workflow of solving the issue, and decides which agent to route to depending on the current progress of the issue.
-- Prompt in `src/agent/prompt/supervisor.py`
-## Problem Decoder
-- The problem decoder analyzes and understands the issue requirements to generate a problem statement consisting of a topic question, codebase representation (i.e., bug localization), the current behaviour, and the expected behaviour.
-- Uses tools `[view_directory, search_relevant_files, view_file_content]`
-- Prompt in `src/agent/prompt/problem_decoder.py`
+## Lingxi v1.5 -- Knowledge-Guided Analysis Scaling
 
-## Solution Mapper
-- The solution mapper reviews the information from the problem decoder with respect to the localized bug and the codebase, to then generate a detailed code change plan for each of the files and or functions.
-- Uses tools `[view_directory, search_relevant_files, view_file_content]`
-- Prompt in `src/agent/prompt/solution_mapper.py`
-## Problem Solver
-- The problem solver implements the proposed change plan from the solution mapper by modifying files
-- Uses tools `[view_directory, search_relevant_files, str_replace_editor]`
-- Prompt in `src/agent/prompt/problem_solver.py`
-## Reviewer
-- The reviewer verifies the proposed fix resulting from the issue resolver agent by generating and executing test cases.
-- Only used in `src/agent/hierarchy_graph_demo.py`
-- Uses tools `[view_directory, search_relevant_files, view_file_content, run_shell_cmd]`
-- Prompt in `src/agent/prompt/reviewer.py`
+<img src="docs/lingxiarch.png" alt="Lingxi v1.5 Architecture" width="700"/>
 
-# Tools
-- There are five main tools are defined and used by multiple agents in the workflow of the prototype
-- Note that tools used by agents are:
-	- Defined with the `@tool` wrapper
-	- Defined while constructing the agent via `create_react_agent` using`tools` parameters
+Lingxi v1.5 builds on two key observations: (1) once a model has a clear edit plan, the code edit usually works if the root cause is correctly located; (2) single-agent pipelines suffer from **context dilution** -- by the time the model reaches code editing, earlier discussion tokens dominate the prompt. Lingxi addresses these by focusing on precise root-cause analysis through historical knowledge, and splitting the workflow into compact, purpose-built agents.
 
-## view_directory
-- View the file structure of the repository, including directories (marked with /).
-    Automatically reduces depth if entries exceed 50.
-    Args:
-        dir_path (str): Starting directory. Defaults to './'.
-        depth (Optional[int]): Maximum depth. None for unlimited. Defaults to None.
-    Returns:
-        List[str]: Sorted list of directories (with /) and files.
-- Defined in `src/agent/tool_set/sepl_tools.py`
-## view_file_content
-- Read the content of the specified file.
-    Parameters:
-        file_name (str): File name relative to the git root directory.
-        view_range (Optional[List[int]): Optional list containing [start_line, end_line] to limit the lines displayed.
-    Usage:
-        - LLM should initially attempt to read the entire file content.
-        - If the file is too large, LLM can use the `view_file_structure` tool to identify relevant code ranges,
-          and then call this tool again specifying the `view_range` to read only the necessary lines.
-    Returns:
-        str: Content of the file or the specified line range.
-- Defined in `src/agent/tool_set/sepl_tools.py`
+**Historical Development Knowledge** -- A module searches the project's history for similar issues and their patches, reverse-engineers the underlying development knowledge, and injects it as a prior into multiple Problem Decoder agents. Each agent analyzes the issue from a different perspective. An Aggregate module merges these analyses into a single comprehensive report, from which the Solution Mapper and Problem Solver generate one accurate patch.
 
-## run_shell_cmd
-- Run a list of shell commands in sequential order and return the stdout results, your working directory is the root of the project
-	Args:
-        commands (List[str]): A list of shell commands to be run in sequential order.
-        config (RunnableConfig) The runtime configuration.
-    Returns:
-        str: Result of running the commands.
-- Defined in `src/agent/tool_set/sepl_tools.py`
+**Multi-Agent Design Principles** -- Each agent gets a crystal-clear contract (mandatory inputs, expected outputs, and the *only* tools it may call). After every agent, the coordinator compresses conversation history to thinking, observations, and actions, discarding verbose tool-call results. Every prompt reminds the agent of the team composition and urges it to stay within scope.
 
+**Tooling Philosophy** -- Lingxi follows a "minimal tool set, maximal information" approach. Tools are designed to provide accurate, sufficient information per call so that the LLM needs fewer steps. All tools are exposed through structured function-calling.
 
-## search_relevant_files
-- Given a query search string (for example, the issue report description, filenames, etc), search for relevant code snippets of files in the project by calculating embedding similarity between the query and code snippets in a vector database.
-    Args:
-        query: A search string (for example, the issue report description, filenames, etc), to be used to find relevant files and functions.
-	Returns:
-		explanations (str): Each retrieved file with an explanation of how the file is relevant to the query. 
-- This tool builds a local Vector DB using `ChromaDB` at the location defined in `src/agent/config.py:RUNTIME_DIR` by indexing all Java/Python files in the project.
-- Used by the `search_relevant_files` tool.
-- Defined in `src/agent/tool_set/context_tools.py`
-## str_replace_editor
-- Custom editing tool for viewing, creating and editing files in plain-text format
-    * State is persistent across command calls and discussions with the user
-    * If `path` is a file, `view` displays the result of applying `cat -n`. If `path` is a directory, `view` lists non-hidden files and directories up to 2 levels deep
-    * The `create` command cannot be used if the specified `path` already exists as a file
-    * If a `command` generates a long output, it will be truncated and marked with `<response clipped>`
-    Args:
-        command (str): The commands to run. Allowed options are: `view`, `create`, `str_replace`, `insert`.
-        path (str): Absolute path to file or directory, e.g. `/workspace/file.py` or `/workspace`.
-        file_text (Optional[str]): Required parameter of `create` command, with the content of the file to be created.
-        old_str (Optional[str]): Required parameter of `str_replace` command containing the string in `path` to replace.
-        new_str (Optional[str]): Optional parameter of `str_replace` command containing the new string (if not given, no string will be added). Required parameter of `insert` command containing the string to insert.
-        insert_line (Optional[int]): Required parameter of `insert` command. The `new_str` will be inserted AFTER the line `insert_line` of `path`.
-        view_range (Optional[List[int]): Optional parameter of `view` command when `path` points to a file. If none is given, the full file is shown. If provided, the file will be shown in the indicated line number range, e.g. [100, 600] will show content between line 100 and 600. Indexing at 1 to start. Setting `[start_line, -1]` shows all lines from `start_line` to the end of the file. Unless you are sure about the line numbers, otherwise, do not set this parameter and use the `view` command to view the whole file.
-- Defined in `src/agent/tool_set/edit_tool.py`
+---
 
+## Lingxi v2.0 -- Trajectory-to-Guidance
 
-# Graphs
+<img src="imgs/overview_fig.jpg" alt="Lingxi v2.0 Overview" width="800"/>
 
-- There are currently two developed graphs in the prototype
-	1. `src/agent/supervisor_graph_demo.py`
-	2. `src/agent/hierarchy_graph_demo.py`
+V1.5's pattern-oriented knowledge compresses history into high-level takeaways, which can omit stage-dependent details or mislead the agent when the retrieved patterns don't fit. V2.0 addresses this with a **trajectory-to-guidance** mechanism that distills **stage-aware procedural guidance** from repair trajectories -- focusing on *how to localize, validate, and iterate* rather than only listing fix patterns.
 
-## Supervisor Graph
-![Graph1](imgs/graph1.png)
-- This graph defines a workflow to resolve an issue given the issue requirements, with use of a supervisor agent and integrated with human feedback
-- The graph is defined in the `issue_resolve_graph` variable and contains the following six nodes:
-	1. `input_handler_node`: This node handles the start of the workflow by setting up the runtime environment given the Github issue report URL.
-	2. `supervisor_node`: This node executes the supervisor agent.
-	3. `problem_decoder`: This node executes the problem decoder agent.
-	4. `solution_mapper`: This node executes the solution mapper agent.
-	5. `problem_solver`: This node executes the problem solver agent.
-- Human feedback: After each node is executed, the result is provided to the user for human feedback if enabled
-	- Recall human feedback is disabled by default, see Run section on how to enable it
-	- If the human provides feedback, the same node will be re-executed with the additional feedback information
-	- If the human provides no feedback, the workflow will continue
+The system follows four phases:
 
+1. **Trajectory Collection** -- For similar historical issues, execute the Lingxi repair pipeline and record the complete problem-solving trace, stored in stage-aligned form (Decoder, Solution, Solver).
 
-## Hierarchy Graph
-![Graph2](imgs/graph2.png)
-- This graph defines a workflow also to resolve an issue, though also implements a multi-agent manager to coordinate between an issue resolver agent (i.e. the graph from [Lingxi  Documentation#Supervisor Graph]) and a reviewer agent, to review the result of the issue resolver agent, and also includes human feedback.
-- The graph is defined in the `hierarchy_graph` variable and contains the following three nodes:
-	1. `mam_node`: This node executes the multi-agent manager agent.
-	2. `issue_resolve_graph`: This node executes the issue resolver agent, combining all nodes and agents defined in [Lingxi  Documentation#Supervisor Graph]
-	3. `reviewer_node`: This node executes the reviewer agent.
+2. **Trajectory Distillation** -- Distill each trajectory into a multi-level abstraction tree: lower levels retain concrete diagnostic sub-goals, middle levels capture broader investigation strategies, and the top level distills general problem-solving principles. Each node also carries **pitfall warnings** from the original repair.
 
-# Development
+3. **Retrieval & Plan Generation** -- For each repair stage, retrieve relevant abstracted nodes via rule-based scoring + LLM-based verification, then generate a **stage-specific plan** adapted to the target issue's context.
 
-## Adding agents
-- Agents are generally defined via:
-	1. System prompt (optional)
-	2. User prompt or past conversation history
-	3. Tools (optional)
-- In Langgraph, there are multiple ways to create and define agents depending on their purpose
-- See [Langgraph Documentation: Build an Agent](https://python.langchain.com/docs/tutorials/agents/) for more information, or view the related graph files in our project
-### Tool-less Agents
-- These agents are defined to be used without tools
-- In this case, the LLM can be used directly
+4. **Guided Repair** -- Inject plans into each stage as structured guidance. Plans inform but do not rigidly determine the repair -- the agent adapts based on newly observed evidence. Completed trajectories are abstracted back for future reuse.
 
-```python
-from langchain_anthropic import ChatAnthropic
-llm = ChatAnthropic(model="claude-3-5-haiku-latest", temperature=0.0)
-response = llm.invoke("Tell me a joke") # Single string input
-response = llm.invoke(["What is 2+2", "What is the previous result times 5"]) # List of string as input
-```
-### ReACT Agents
-- These agents are defined with tools which they will decide to use on their own time
-- In this case, the agent should be created using [`create_react_agent`](https://langchain-ai.github.io/langgraph/reference/prebuilt/#langgraph.prebuilt.chat_agent_executor.create_react_agent), and will expect different input (see [Lingxi  Documentation#Agent Expected Input and State])
-```python
-from langchain_anthropic import ChatAnthropic
-from langgraph.prebuilt import create_react_agent
-from langchain_core.messages import HumanMessage
+---
 
-llm = ChatAnthropic(model="claude-3-5-haiku-latest", temperature=0.0) # Create LLM
-tools = [math_tool] # Tool example
-problem_solver_agent = create_react_agent(
-    llm,
-    tools=problem_decoder_tools, # Required for ReACT agents
-    prompt="You must solve the given problems!" # Optional system prompt
-)
-problem_solver_agent.invoke({"messages": [
-	HumanMessage(content="What is 2+2")
-]}) # How to invoke the agent using user prompt "What is 2+2"
-```
-- ReACT agents also create a subgraph that includes the looks like so:
-![Graph3](imgs/graph3.png)
-### Agent Expected Input and LangGraph State
-- Different agent creation methods will expect different inputs
-- An agent without tools used directly from a class such as `ChatAnthropic` can  expect relatively flexible inputs:
-	- A string
-	- A list of strings
-	- A list of `BaseMessage` - usually their subclasses (i.e., `SystemMessage`, `HumanMessage`, `AIMessage`, ..)
-- When defining and invoking a ReACT agent, it will instead expect more structured input involving a `MessagesState` object, known as the LangGraph state
-	- The `MessagesState` holds and defines the conversation history of the current run, as well as any additional variables if a custom State class is defined (e.g., see `src/agent/state.py:CustomState)
-	- The `MessagesState` must be a dictionary (`dict`, `AnnotatedDict`) with the `messages` (the convo history) key as a list of `BaseMessages` - usually their subclasses (i.e., `SystemMessage`, `HumanMessage`, `AIMessage`, ..)
-	- The messages in the state is updated automatically by the Langgraph graph within the defined nodes in the graph
-	- Custom variables can be updated when returning from each node using the `update` kwarg in the `Command` class (e.g., `Command(update={"custom_var": 2"}))
-- It is important to note that the `messages` of `MessagesState` follows strict structure when being invoked by ReACT agents and may be difficult to alter
-	- The main reason is that if an agent uses a tool, the `AIMessage` of the agent will be proceeded by a `ToolMessage` containing information of the corresponding tool
-	- If one or the other message is removed from the state, the workflow will break
+## Publications & Resources
 
-### System Prompts
-- Note that a system prompt can take different forms in LangGraph:
-	- `prompt` kwarg of `create_react_agent` (str): This is converted to a SystemMessage and added to the beginning of the list of messages in state["messages"].
-	- SystemMessage: this is added to the beginning of the list of messages in state["messages"].
-	- Callable: This function should take in full graph state and the output is then passed to the language model.
-	- Runnable: This runnable should take in full graph state and the output is then passed to the language model.
+- **Lingxi v1.5**: *Lingxi: Repository-Level Issue Resolution Framework Enhanced by Procedural Knowledge Guided Scaling.* [Paper (arXiv)](https://arxiv.org/abs/2510.11838) | [Technical Report (PDF)](docs/Lingxi%20v1.5%20Technical%20Report%20200725.pdf) | [Replication Package (Zenodo)](https://doi.org/10.5281/zenodo.16777249)
+- **Lingxi v2.0**: *Trajectory Abstraction for Guidance-Driven Repository-Level Issue Resolution.* [Technical Report (PDF)](docs/Lingxi%20v2.0%20Technical%20Report%202026.pdf) | Paper coming soon
+- **SWE-bench Submission**: [SWE-bench/experiments#432](https://github.com/SWE-bench/experiments/pull/432)
 
-## Adding tools
-- Tools can be considered as Python functions that can be used by agents/LLM (defined via `create_react_agent`)
-- These are defined using the `@tool` decorator (`from langchain_core.tools import tool`), and require docstring explaining the function, the args, and expected return info
-	- This information is passed to the agent as context for using the function
-	- Instead of defining args in the docstring, type hints can be used which will be parsed and sent to the agent as well
-```python
-# tools.py
-from langchain_core.tools import tool
+---
 
-# Via type hints
-@tool
-def multiply(a: int, b: int) -> int:
-    """Multiply two numbers."""
-    return a * b
+## Setup
 
-from typing import Annotated, List
-# Via annotated type hints
-@tool
-def multiply_by_max(
-    a: Annotated[int, "scale factor"],
-    b: Annotated[List[int], "list of ints over which to take maximum"],
-) -> int:
-    """Multiply a by the maximum of b."""
-    return a * max(b)
+### 1. Install Dependencies
+
+```bash
+# Using pip
+cd Lingxi && pip install -e .
+
+# Or using uv (recommended)
+uv sync
 ```
 
-- Once tools are created, they can be linked to agents via the `tools` keyword in the `create_react_agent` constructor:
-```python
-# graph.py
-from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import HumanMessage
-from langgraph.prebuilt import create_react_agent
+### 2. Configure Environment Variables
 
-from tools import multiply, multiply_by_max # Load the example tools above
+Create a `.env` file in the project root:
 
-llm = ChatAnthropic(model="claude-3-5-haiku-latest", temperature=0.0)
-tools = [multiply, multiply_by_max] # Define the tools for the agent using the created tools above
-problem_solver_agent = create_react_agent(
-    llm,
-    tools=problem_decoder_tools, # Required for ReACT agents
-    prompt="You must solve the given problems!" # Optional system prompt
-)
+```bash
+# LLM Configuration
+LLM_PROVIDER=anthropic          # Options: "anthropic", "openai", "deepseek"
+LLM_MODEL=claude-3-5-haiku-latest
 
-# Example prompts
-problem_solver_agent.invoke({"messages": [
-	HumanMessage(content="What is 2*5")
-]}) 
-problem_solver_agent.invoke({"messages": [
-	HumanMessage(content="What is 2 mutlipled by the max of this list: [5, 10, 15]")
-]})
-```
-- Additional info can be read on [Langchain Documentation: How to create tools](https://python.langchain.com/docs/how_to/custom_tools/), or view the related tool files in our project
+# API Keys (set the one matching your LLM_PROVIDER)
+ANTHROPIC_API_KEY=your_key_here
+OPENAI_API_KEY=your_key_here    # Also required for embeddings (text-embedding-3-small)
+# DEEPSEEK_API_KEY=your_key_here
 
-## Creating graphs
-- A graph defines a multi-agent workflow, that generally follows these steps:
-1. Create a Python file for the graph
-2. Define agents
-3. Define nodes for each agents where they will be invoked, containing the logic that will happen before/after their individual invocation.
-4. Build the graph using `StateGraph` (base class for graph), constructing edges between the defined nodes, and with a State (e.g., `MessagesState`), 
-	- Consider implementing an edge to `END` node (automatically included in every graph) to manually define when to terminate the workflow
-5. Define a variable for the compiled graph using `graph.compile()` 
-6. Create a new entry in `langgraph.json` in the format of `path_to_graph_file.py:compiled_graph_var`
-
-```python
-# 1. Create the graph file: graph.py
-from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import HumanMessage
-from langgraph.prebuilt import create_react_agent
-from langgraph.graph import MessagesState, StateGraph, END
-
-# 2. Define agents
-from .tools import multiply, multiply_by_max # Load the example tools above
-
-llm = ChatAnthropic(model="claude-3-5-haiku-latest", temperature=0.0)
-tools = [multiply, multiply_by_max] # Define the tools for the agent using the created tools above
-problem_solver_agent = create_react_agent(
-    llm,
-    tools=problem_decoder_tools, # Required for ReACT agents
-    prompt="You must solve the given problems!" # Optional system prompt
-)
-
-# 3. Define nodes
-def problem_solver_node(state: MessagesState):
-	response = problem_solver_agent.invoke(state) # Invoke the problem solver on the messages
-	new_messages = response["messages"][len(state["messages"]):] # Simple processing: only get the new messages from this LLM invocation
-	return new_messages
-
-# 4. Build the graph
-workflow = StateGraph(MessagesState)
-workflow.add_edge(START, "problem_solver") # Begin the workflow by entering the problem_solver
-# Add the problem_solver agent node
-workflow.add_node("problem_solver", problem_solver_node)
-# Add the END node to terminate the workflow after the problem_solver is done
-workflow.add_edge("problem_solver", END)
-
-# 5. Compile the graph
-graph = workflow.compile()
-
-# Example prompts
-problem_solver_agent.invoke({"messages": [
-	HumanMessage(content="What is 2*5")
-]}) 
-problem_solver_agent.invoke({"messages": [
-	HumanMessage(content="What is 2 mutlipled by the max of this list: [5, 10, 15]")
-]})
-```
-- Step 6: Define the graph in langgraph.json
-```json
-{
-  "dependencies": ["."],
-  "graphs": {
-    "demo_graph": "graph.py:graph",
-    "hierarchy_graph": "./src/agent/hierarchy_graph_demo.py:hierarchy_graph"
-  },
-  "env": ".env"
-}
+# GitHub Access
+GITHUB_TOKEN=your_token_here    # Profile > Settings > Developer Settings > Personal access tokens
 ```
 
-- Additional information can be found via the Langgraph Documentation, or view the related graph files in our project
+### 3. Run
 
-## Creating subgraphs
-- Subgraphs (graphs within the graph) can be created
-- An example of this is our Hierarchy Demo graph, which uses the Issue resolve graph as a subgraph
-```python
-# hierarchy_graph_demo.py
-...
-from langgraph.graph import END, START, StateGraph
-from agent.supervisor_graph_demo import issue_resolve_graph
-...
-builder = StateGraph(CustomState)
-builder.add_node(
-    "issue_resolve_graph",
-    issue_resolve_graph,
-    destinations=({"mam_node": "mam_node-issue_resolve_graph"}),
-) # Creates the issue_resolve_graph node subgraph, and define an edge from mam_node to issue_resolve_graph
-builder.add_node(
-    "mam_node",
-    mam_node,
-    destinations=(
-        {
-            "reviewer_node": "mam_node-reviewer_node",
-            "issue_resolve_graph": "mam_node-issue_resolve_graph",
-        }
-    ),
-) # Create the multi-agent manager node and define edges between mam_node to reviewer_node, and mam_node back to issue_resolve_graph
-builder.add_node(
-    "reviewer_node",
-    reviewer_node,
-    destinations=({"mam_node": "mam_node-reviewer_node"}),
-) # Create the reviewer node and define an edge from mam_node to reviewer node
-builder.add_edge(START, "mam_node") # Define start
-builder.add_edge("issue_resolve_graph", "mam_node") # Finally add the edge from issue_resolve_graph and mam_node
-hierarchy_graph = builder.compile() # Compile the graph
+```bash
+# Using pip installation
+langgraph dev --no-reload
+
+# Using uv
+uv run --env-file .env langgraph dev --no-reload
 ```
-- Note that a subgraph is also created when creating a node that includes a ReACT based agent as mentioned above
-- A reACT agent subgraph consits of nodes including:
-	- `__start__`: Defines the start of the subgraph
-	- `agent`: The agent that was defined and will be used within the node
-	- `tools`: The tools bound to the agent via the `tools` kwarg
-	- `__end__`: Defines the end of the subgraph
-	- Note that conditional edges are illustrated via dashed lines, and mean that the agent will decide on its own whether to transition to that node on its own depending on certain critera (e.g., if it recognizes it requires tool use)
-- More info can be found on the [Langgraph Documentation: How to use subgraphs](https://langchain-ai.github.io/langgraph/how-tos/subgraph/), or view the Multi-agent Manager related graph file in our project (`src/agent/hierarchy_graph_demo.py`)
 
-# Additional Documentation
+This starts a local LangGraph Studio instance and opens the UI in your browser.
 
+### 4. Usage
 
-## File Structure
+1. Select a graph from the top-left dropdown:
+   ![Graph Select](imgs/GraphSelect.png)
+
+2. Click **"+ Message"** and paste a GitHub issue URL (e.g., `https://github.com/gitpython-developers/GitPython/issues/1977`):
+   ![Add Message](imgs/AddMsg.png)
+
+3. Click **Submit**.
+
+> **Human-in-the-loop**: Disabled by default. Enable via the checkbox in the LangGraph Studio UI before submitting:
+> ![Enable HIL](imgs/HILenable.png)
+
+---
+
+## Architecture
+
+### Agent System
+
+| Agent | Role | Tools |
+|-------|------|-------|
+| **Supervisor** | Routes workflow between agents based on progress | - |
+| **Problem Decoder** | Analyzes issues, performs bug localization | `view_directory`, `search_relevant_files`, `view_file_content` |
+| **Solution Mapper** | Creates detailed code change plans | `view_directory`, `search_relevant_files`, `view_file_content` |
+| **Problem Solver** | Implements code changes | `view_directory`, `search_relevant_files`, `str_replace_editor` |
+| **Reviewer** | Validates fixes and runs tests (hierarchy graph only) | `view_directory`, `search_relevant_files`, `view_file_content`, `run_shell_cmd` |
+| **Multi-Agent Manager** | Coordinates resolver and reviewer (hierarchy graph only) | - |
+
+### Graphs
+
+**Supervisor Graph** (`src/agent/supervisor_graph_demo.py`):
+
+![Supervisor Graph](imgs/graph1.png)
+
+A linear workflow: `input_handler` -> `supervisor` -> `problem_decoder` -> `solution_mapper` -> `problem_solver`, with optional human feedback after each step.
+
+**Hierarchy Graph** (`src/agent/hierarchy_graph_demo.py`):
+
+![Hierarchy Graph](imgs/graph2.png)
+
+Wraps the supervisor graph as a subgraph, adding a multi-agent manager and reviewer for iterative fix validation.
+
+### Tool Set
+
+| Tool | Description | Location |
+|------|-------------|----------|
+| `view_directory` | Explore repository tree with adaptive depth | `src/agent/tool_set/sepl_tools.py` |
+| `view_file_content` | Inspect file text, auto-truncates long files | `src/agent/tool_set/sepl_tools.py` |
+| `search_files_by_keywords` | Multi-keyword semantic search via ripgrep | `src/agent/tool_set/sepl_tools.py` |
+| `str_replace_editor` | Apply code edits (view, create, replace, insert) | `src/agent/tool_set/edit_tool.py` |
+| `run_shell_cmd` | Execute sequential shell commands | `src/agent/tool_set/sepl_tools.py` |
+
+---
+
+## Development Guide
+
+For a comprehensive guide with code examples on adding agents, tools, and graphs, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). For detailed file-level documentation, see [CLAUDE.md](CLAUDE.md).
+
+### Quick Reference
+
+- **Adding agents**: Create prompt in `src/agent/prompt/`, define tools, use `create_react_agent()`, add node to `StateGraph`
+- **Creating graphs**: Define `StateGraph`, add nodes/edges, compile, register in `langgraph.json`
+- **Adding tools**: Use `@tool` decorator with docstrings, link to agents via `tools` parameter
+
+### Code Quality
+
+```bash
+ruff check src/    # Linting
+ruff format src/   # Formatting
+mypy src/          # Type checking
+pytest             # Testing
+```
+
+---
+
+## Project Structure
+
 ```
 .
-├── langgraph.json
-├── pyproject.toml
-├── src
-│   └── agent
-│       ├── constant.py
-│       ├── github_utils.py
-│       ├── hierarchy_graph_demo.py
-│       ├── __init__.py
-│       ├── llm.py
-│       ├── parsers.py
-│       ├── prompt
-│       │   ├── context_manager.py
-│       │   ├── __init__.py
-│       │   ├── mam.py
-│       │   ├── problem_decoder.py
-│       │   ├── problem_solver.py
-│       │   ├── reviewer.py
-│       │   ├── solution_mapper.py
-│       │   └── supervisor.py
-│       ├── runtime_config.py
-│       ├── state.py
-│       ├── supervisor_graph_demo.py
-│       ├── tool_set
-│       │   ├── constant.py
-│       │   ├── context_tools.py
-│       │   ├── edit_history.py
-│       │   ├── edit_tool.py
-│       │   ├── linter
-│       │   │   ├── base.py
-│       │   │   ├── impl
-│       │   │   │   ├── python.py
-│       │   │   │   ├── treesitter_compat.py
-│       │   │   │   └── treesitter.py
-│       │   │   ├── __init__.py
-│       │   │   ├── linter.py
-│       │   ├── oheditor.py
-│       │   ├── sepl_tools.py
-│       │   └── utils.py
-│       └── utils.py
+├── langgraph.json              # LangGraph configuration
+├── pyproject.toml              # Dependencies
+├── docs/                       # Technical reports and figures
+└── src/agent/
+    ├── supervisor_graph_demo.py # Primary workflow graph
+    ├── hierarchy_graph_demo.py  # Extended workflow with reviewer
+    ├── state.py                 # LangGraph state definitions
+    ├── llm.py                   # LLM provider configuration
+    ├── runtime_config.py        # Environment setup (singleton)
+    ├── prompt/                  # Agent system prompts
+    ├── tool_set/                # Agent tools
+    │   ├── sepl_tools.py        # Core development tools
+    │   ├── context_tools.py     # Vector search & knowledge management
+    │   ├── edit_tool.py         # File editing (OHEditor)
+    │   └── linter/              # Code quality tools
+    └── utils.py                 # Helper functions
 ```
-## Dir /
-### langgraph.json
-- Defines configuration for the execution of the `langgraph dev` command, currently including:
-	- The Python file(s) containing LangGraph graphs and the variable name(s) in the corresponding file(s) defining the graph
-	- The location of the `.env` file
-- More information can be found in [LangGraph Application Structure](https://langchain-ai.github.io/langgraph/concepts/application_structure/)
-### pyproject.toml
-- Defines all dependencies to run the prototype, which should be changed accordingly to corresponding additional dependencies
 
-## Dir src/agent/
-- Contains files defining the main workflow and structure of the prototype
-### constant.py
-- Defines several constant variables used throughout the prototype.
-	- `RUNTIME_DIR`: Defines the local location where files will be stored
-	- `PATCH_RESULT_DIR`: Defines where resulting patches will be stored.
-	- `REQUEST_TIMEOUT`: Defines the amount of seconds before web requests via `requests` library timeout.
-	- `PY_LANGUAGE`,`JAVA_LANGUAGE`: Defines tree-sitter parsers used for file indexing.
-### github_utils.py
-- Defines functions for using Github API to collect git-based information (e.g., issue report)
-	- `get_issue_description`: Retrieves the issue description given the owner, project name, and issue ID
-	- `get_issue_close_commit`: Retrieves the commit that closed the pull request corresponding to a given issue
-- Remember to define `GITHUB_TOKEN` environment variable in the `.env` for expected behaviour of this functionality
-### llm.py
-- Defines the LLM based on the `LLM_PROVIDER` and `LLM_MODEL` env vars.
-	- `create_llm`: Creates the LLM according to `LLM_PROVIDER` and `LLM_MODEL` env vars
-- Remember to define `LLM_PROVIDER`, `LLM_MODEL`, and the corresponding API token environment variables in the `.env` for expected behaviour of this functionality
-### parsers.py
-- Defines parsers used to extract information from LLM responses
-	- `relevant_file_explanations_parser`: A parser to extract file paths and explanations from JSON formatted LLM responses
-### runtime_config.py
-- Handles all runtime environment configuration setup. Currently supports loading runtime environment using a GitHub issue URL.
-	- `RuntimeConfig`: Singleton class to hold and setup runtime configuration. Each configuration loading entry point starts with `load_from`.
-	- `RuntimeConfig.load_from_github_issue_url`: Setup the runtime config based on a given issue UR;
-		Args:
-			issue_url: The given issue URL
-### state.py
-- Defines the custom state structures for the prototype.
-### utils.py
-- Defines various util functions for the prototype.
-## Dir src/agent/prompt/
-- Contains files defining the prompts for each agent, and prompts for other steps of the prototype (multi-agent manager, supervisor, problem decoder, solution mapper, problem solver, reviewer)
+## Notes
 
-### context_manager.py
-- Contains prompts relevant to context management
-- `RELEVANT_FILE_EXPLANATION_SYSTEM_PROMPT`: A prompt used in `search_relevant_files` tool to ask LLM to explain the relevancy of files retrieved from the vector DB.
-
-## Dir src/agent/tool_set/
-- Contains files defining the tools used by agents
-### constant.py
-- Defines several constant variables used throughout the tools. 
-### context_tools.py
-- Defines context management tools
-	- `EMBEDDING_FUNCTION`: Defines the embedding model for the Vector DB with use of the `search_relevant_files` tool. Currently uses `OpenAIEmbeddings` and requires `OPENAI_API_KEY` environment variable in `.env`.
-	- `PROJECT_KNOWLEDGE_TEXT_SPLITTER`: Defines the text splitter for the Vector DB with use of the `search_relevant_files` tool.
-	- `create_project_knowledge`: Creates the project knowledge component. Indexes all Java and Python files in the directory of the corresponding issue. Builds a local VectorDB using `ChromaDB` at the location defined in `src/agent/config.py:RUNTIME_DIR`. The algorithm differentiates between functions/methods and other code by using `tree-sitter`. Used by the `search_relevant_files` tool.
-	- `summarizer`: Summarizes the information of the chat history/workflow and aggregates it into detailed steps. Used at each step in the supervisor agent.
-
-### edit_history.py
-- History management for file edits with disk-based storage and memory constraints for OHEditor
-- Adapted from OpenHands file editor. For more information refer to https://github.com/All-Hands-AI/openhands-aci/blob/main/openhands_aci/editor/editor.py
-
-### edit_tool.py
-- Enables file edits via OHEditor
-- Adapted from OpenHands file editor. For more information refer to https://github.com/All-Hands-AI/openhands-aci/blob/main/openhands_aci/editor/editor.py
-
-### oheditor.py
-- OHEditor is a filesystem editor tool that allows the agent to
-    - view
-    - create
-    - navigate
-    - edit files
-- Adapted from OpenHands file editor. For more information refer to https://github.com/All-Hands-AI/openhands-aci/blob/main/openhands_aci/editor/editor.py
-
-### sepl_tools.py
-- Defines software Engineering Project Lifecycle tools
-	- `extract_git_diff_local`: Executes and returns the `git diff` command in a local runtime environment.
-	- `save_git_diff`: Exports the result of the `git diff` command.
-### utils.py
-- Defines util functions used by OHEditor
-- Adapted from OpenHands file editor. For more information refer to https://github.com/All-Hands-AI/openhands-aci/blob/main/openhands_aci/editor/editor.py
-## Dir src/agent/tool_set/linter/
-- Defines functionality for the linter used in OHEditor
-- Adapted from Aider linter. For more information refer to https://github.com/paul-gauthier/aider/blob/main/aider/linter.py
-
-
-# Additional Notes
-
-## Space Limitations
-### Cloned Repos
-- When submitting a URL, a local copy of the repository will be cloned at a specific commit, either:
-	- The most recent commit, or
-	- The commit before the commit that was merged in the pull request fixing the issue (if applicable)
-- This will take up considerable amount of space overtime, so be sure to clean the directory corresponding to `src/agent/constant.py:RUNTIME_DIR`
-
-### `search_relevant_files` Vector DBs
-- If using the `search_relevant_files` tool, a vector/Chroma DB will be built for each issue submitted
-- This will take up considerable amount of space overtime, so be sure to clean the directory corresponding to `src/agent/constant.py:RUNTIME_DIR`
+- **Storage**: Cloned repositories and ChromaDB instances are stored at the path defined in `src/agent/constant.py:RUNTIME_DIR`. Clean this directory periodically to manage disk space.
+- **Embeddings**: The `search_relevant_files` tool requires OpenAI API access to the `text-embedding-3-small` model.
+- **Additional providers**: LLM integrations beyond the built-in ones can be added via [LangChain Chat Models](https://python.langchain.com/docs/integrations/chat/).
